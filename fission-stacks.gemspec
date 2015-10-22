@@ -11,5 +11,6 @@ Gem::Specification.new do |s|
   s.require_path = 'lib'
   s.add_runtime_dependency 'fission', '>= 0.2.4', '< 1.0.0'
   s.add_runtime_dependency 'fission-data', '>= 0.2.11', '< 1.0.0'
+  s.add_runtime_dependency 'jackal-stacks', '< 1.0.0'
   s.files = Dir['{lib}/**/**/*'] + %w(fission-stacks.gemspec README.md CHANGELOG.md)
 end
