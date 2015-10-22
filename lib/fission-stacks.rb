@@ -3,7 +3,7 @@ require 'jackal-stacks'
 
 module Fission
   module Stacks
-    autoload :RemoteBuilder, 'fission-stacks/builder'
+    autoload :RemoteBuilder, 'fission-stacks/remote_builder'
   end
 end
 
