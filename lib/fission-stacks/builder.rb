@@ -2,13 +2,16 @@ require 'fission-stacks'
 
 module Fission
   module Stacks
-    class Builder < Jackal::Stacks::Builder
+    class RemoteBuilder < Jackal::Stacks::Builder
 
       # Build or update stacks
       #
       # @param message [Carnivore::Message]
       def execute(message)
         failure_wrap(message) do |payload|
+          unless(payload.get(:data, :stacks, :name))
+            payload.set(:data, :stacks, :name, 'itsatrap')
+          end
           ctn = remote_process
           asset = asset_store.get(payload.get(:data, :stacks, :asset))
           remote_asset = '/tmp/asset.zip'
@@ -29,14 +32,15 @@ module Fission
               payload.set(:data, :stacks, :updated, true)
             else
               info "Stack does not exist. Building new stack [#{payload.get(:data, :stacks, :name)}]"
-              init_provider(provider)
               run_stack(ctn, payload, remote_dir, :create)
               payload.set(:data, :stacks, :created, true)
             end
           rescue => e
-            # log error
+            error "Failed to apply stack action! #{e.class}: #{e}"
+            debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
             raise
           end
+          job_completed(:stacks, payload, message)
         end
       end
 
@@ -53,7 +57,7 @@ module Fission
         unless([:create, :update].include?(action.to_sym))
           abort ArgumentError.new("Invalid action argument `#{action}`. Expecting `create` or `update`!")
         end
-        ctn.exec!('bundle install', :cwd => directory)
+        ctn.exec!('bundle install', :cwd => directory, :timeout => 120)
         stack_name = payload.get(:data, :stacks, :name)
 
         event!(:info, :info => "Starting stack #{action} - #{stack_name}!", :message_id => payload[:message_id])
@@ -62,10 +66,13 @@ module Fission
         future = Zoidberg::Future.new do
           begin
             ctn.exec(
-              "bundle exec sfn #{action} --file #{payload.get(:data, :stacks, :template)}",
+              "bundle exec sfn #{action} #{stack_name} --defaults --no-interactive-parameters --file #{payload.get(:data, :stacks, :template)}",
               :stream => stream,
               :cwd => directory,
-              :environment => api_environment_variables,
+              :environment => api_environment_variables.merge(
+                'HOME' => directory,
+                'USER' => 'SparkleProvision'
+              ),
               :timeout => 3600 # TODO: This will probably need to be tunable!
             )
           rescue => e
@@ -99,10 +106,12 @@ module Fission
         end
       end
 
+      # @return [Hash] API environment variables for remote process
       def api_environment_variables
         Smash.new.tap do |env|
-          env['SFN_PROVIDER'] = config.get(:orchestration, :api, :provider)
-          config.fetch(:orchestration, :api, :credentials, {}).each do |k,v|
+          ac = api_config
+          env['SFN_PROVIDER'] = ac[:provider]
+          ac.fetch(:credentials, {}).each do |k,v|
             env[k.upcase] = v
           end
         end
@@ -111,3 +120,5 @@ module Fission
     end
   end
 end
+
+Fission.register(:stacks, :remote_builder, Fission::Stacks::RemoteBuilder)
