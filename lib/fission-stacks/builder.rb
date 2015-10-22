@@ -40,6 +40,11 @@ module Fission
         end
       end
 
+      # Always allowed in fission. Let routing rules handle entry
+      def allowed?(*_)
+        true
+      end
+
       # Run action on stack
       #
       # @param ctn [Fission::Utils::RemoteProcess]
