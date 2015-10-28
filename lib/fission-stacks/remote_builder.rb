@@ -10,18 +10,16 @@ module Fission
       def execute(message)
         failure_wrap(message) do |payload|
           unless(payload.get(:data, :stacks, :name))
-            payload.set(:data, :stacks, :name,
-              payload.get(:data, :stacks, :project).tr('_', '-')
-            )
+            payload.set(:data, :stacks, :name, stack_name(payload))
           end
           unless(payload.get(:data, :stacks, :template))
-            payload.set(:data, :stacks, :template, 'infrastructure')
+            payload.set(:data, :stacks, :template, config.fetch(:template, 'infrastructure'))
           end
           ctn = remote_process
           asset = asset_store.get(payload.get(:data, :stacks, :asset))
           remote_asset = '/tmp/asset.zip'
           remote_dir = '/tmp/unpacked'
-          ctn.push_file(asset, remote_asset)
+          ctn.push_file(File.open(asset.path, 'rb'), remote_asset)
           ctn.exec!("mkdir -p #{remote_dir}")
           ctn.exec!("unzip #{remote_asset} -d #{remote_dir}")
           begin
@@ -32,7 +30,7 @@ module Fission
           end
           begin
             if(stack)
-              info "Stack currently exists. Applying update [#{stack}]"
+              info "Stack currently exists. Applying update [#{stack.name}]"
               run_stack(ctn, payload, remote_dir, :update)
               payload.set(:data, :stacks, :updated, true)
             else
