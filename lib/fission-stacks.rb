@@ -8,3 +8,14 @@ module Fission
 end
 
 require 'fission/version'
+
+Fission.service(
+  :stacks,
+  :description => 'Manage stacks',
+  :configuration => {
+    :template => {
+      :description => 'Template name to build',
+      :type => :string
+    }
+  }
+)
