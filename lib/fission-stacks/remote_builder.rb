@@ -31,12 +31,17 @@ module Fission
           begin
             if(stack)
               info "Stack currently exists. Applying update [#{stack.name}]"
+              event!(:info, :info => "Found existing stack. Applying update. [#{stack.name}]", :message_id => payload[:message_id])
               run_stack(ctn, payload, remote_dir, :update)
               payload.set(:data, :stacks, :updated, true)
+              event!(:info, :info => "Stack update complete! [#{stack.name}]", :message_id => payload[:message_id])
             else
-              info "Stack does not exist. Building new stack [#{payload.get(:data, :stacks, :name)}]"
+              stack_name = payload.get(:data, :stacks, :name)
+              info "Stack does not exist. Building new stack [#{stack_name}]"
+              event!(:info, :info => "Building new stack. [#{stack_name}]", :message_id => payload[:message_id])
               run_stack(ctn, payload, remote_dir, :create)
               payload.set(:data, :stacks, :created, true)
+              event!(:info, :info => "Stack build complete! [#{stack_name}]", :message_id => payload[:message_id])
             end
           rescue => e
             error "Failed to apply stack action! #{e.class}: #{e}"
