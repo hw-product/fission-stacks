@@ -41,8 +41,10 @@ module Fission
               event!(:info, :info => "Building new stack. [#{stack_name}]", :message_id => payload[:message_id])
               run_stack(ctn, payload, remote_dir, :create)
               payload.set(:data, :stacks, :created, true)
+              stack = stacks_api.stacks.get(stack_name)
               event!(:info, :info => "Stack build complete! [#{stack_name}]", :message_id => payload[:message_id])
             end
+            payload.set(:data, :stacks, :id, stack.id)
           rescue => e
             error "Failed to apply stack action! #{e.class}: #{e}"
             debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
