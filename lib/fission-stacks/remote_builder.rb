@@ -73,13 +73,14 @@ module Fission
         event!(:info, :info => "Starting stack #{action} - #{stack_name}!", :message_id => payload[:message_id])
 
         stream = Fission::Utils::RemoteProcess::QueueStream.new
+        env_vars = api_environment_variables
         future = Zoidberg::Future.new do
           begin
             ctn.exec(
-              "bundle exec sfn #{action} #{stack_name} --defaults --no-interactive-parameters --file #{payload.get(:data, :stacks, :template)}",
+              "bundle exec sfn #{action} #{stack_name} --defaults --no-interactive-parameters --file #{payload.get(:data, :stacks, :template)} --yes",
               :stream => stream,
               :cwd => directory,
-              :environment => api_environment_variables.merge(
+              :environment => env_vars.merge(
                 'HOME' => directory,
                 'USER' => 'SparkleProvision'
               ),
@@ -118,8 +119,8 @@ module Fission
 
       # @return [Hash] API environment variables for remote process
       def api_environment_variables
+        ac = api_config
         Smash.new.tap do |env|
-          ac = api_config
           env['SFN_PROVIDER'] = ac[:provider]
           ac.fetch(:credentials, {}).each do |k,v|
             env[k.upcase] = v
