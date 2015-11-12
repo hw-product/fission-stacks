@@ -73,7 +73,7 @@ module Fission
         event!(:info, :info => "Starting stack #{action} - #{stack_name}!", :message_id => payload[:message_id])
 
         stream = Fission::Utils::RemoteProcess::QueueStream.new
-        env_vars = build_environment_variables
+        env_vars = build_environment_variables(payload)
         future = Zoidberg::Future.new do
           begin
             ctn.exec(
@@ -89,7 +89,7 @@ module Fission
           rescue => e
             error "Stack #{action} failed (ID: #{payload[:message_id]}): #{e.class} - #{e}"
             debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
-            Fission::Utils::RemoteProcess::Result(-1, "Build failed (ID: #{uuid}): #{e.class} - #{e}")
+            Fission::Utils::RemoteProcess::Result.new(-1, "Build failed (ID: #{payload[:message_id]}): #{e.class} - #{e}")
           ensure
             stream.write :complete
           end
