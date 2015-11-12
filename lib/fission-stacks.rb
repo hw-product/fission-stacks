@@ -16,6 +16,10 @@ Fission.service(
     :template => {
       :description => 'Template name to build',
       :type => :string
+    },
+    :environment => {
+      :description => 'Custom environment variables',
+      :type => :hash
     }
   }
 )
