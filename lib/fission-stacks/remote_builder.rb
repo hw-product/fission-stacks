@@ -73,7 +73,7 @@ module Fission
         event!(:info, :info => "Starting stack #{action} - #{stack_name}!", :message_id => payload[:message_id])
 
         stream = Fission::Utils::RemoteProcess::QueueStream.new
-        env_vars = api_environment_variables
+        env_vars = build_environment_variables
         future = Zoidberg::Future.new do
           begin
             ctn.exec(
@@ -115,6 +115,13 @@ module Fission
           error = Fission::Error::RemoteProcessFailed.new("Stack #{action} failed - Exit code: #{result.exit_code}")
           raise error
         end
+      end
+
+      def build_environment_variables(payload)
+        base = common_environment_variables(payload)
+        base.merge!(config.fetch(:environment, Smash.new).to_smash)
+        base.merge!(api_environment_variables)
+        base
       end
 
       # @return [Hash] API environment variables for remote process
