@@ -9,11 +9,11 @@ module Fission
       # @param message [Carnivore::Message]
       def execute(message)
         failure_wrap(message) do |payload|
-          unless(payload.get(:data, :stacks, :name))
-            payload.set(:data, :stacks, :name, stack_name(payload))
-          end
           unless(payload.get(:data, :stacks, :template))
             payload.set(:data, :stacks, :template, config.fetch(:template, 'infrastructure'))
+          end
+          unless(payload.get(:data, :stacks, :name))
+            payload.set(:data, :stacks, :name, stack_name(payload))
           end
           ctn = remote_process
           asset = asset_store.get(payload.get(:data, :stacks, :asset))
