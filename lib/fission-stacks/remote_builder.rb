@@ -23,10 +23,10 @@ module Fission
           ctn.push_file(File.open(asset.path, 'rb'), remote_asset)
           ctn.exec!("mkdir -p #{remote_dir}")
           ctn.exec!("unzip #{remote_asset} -d #{remote_dir}")
-          begin
-            ctn.exec!("sfn describe #{payload.get(:data, :stacks, :name)}")
+          result = ctn.exec("sfn describe #{payload.get(:data, :stacks, :name)}")
+          if(result.success?)
             stack = payload.get(:data, :stacks, :name)
-          rescue => e
+          else
             debug "Failed to fetch defined stack name: #{e.class} - #{e}"
             stack = nil
           end
