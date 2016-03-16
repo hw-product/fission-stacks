@@ -17,34 +17,35 @@ module Fission
           end
           ctn = remote_process
           asset = asset_store.get(payload.get(:data, :stacks, :asset))
+          asset.flush
           remote_asset = '/tmp/asset.zip'
           remote_dir = '/tmp/unpacked'
           ctn.push_file(File.open(asset.path, 'rb'), remote_asset)
           ctn.exec!("mkdir -p #{remote_dir}")
           ctn.exec!("unzip #{remote_asset} -d #{remote_dir}")
           begin
-            stack = stacks_api.stacks.get(payload.get(:data, :stacks, :name))
+            ctn.exec!("sfn describe #{payload.get(:data, :stacks, :name)}")
+            stack = payload.get(:data, :stacks, :name)
           rescue => e
             debug "Failed to fetch defined stack name: #{e.class} - #{e}"
             stack = nil
           end
           begin
             if(stack)
-              info "Stack currently exists. Applying update [#{stack.name}]"
-              event!(:info, :info => "Found existing stack. Applying update. [#{stack.name}]", :message_id => payload[:message_id])
+              info "Stack currently exists. Applying update [#{stack}]"
+              event!(:info, :info => "Found existing stack. Applying update. [#{stack}]", :message_id => payload[:message_id])
               run_stack(ctn, payload, remote_dir, :update)
               payload.set(:data, :stacks, :updated, true)
-              event!(:info, :info => "Stack update complete! [#{stack.name}]", :message_id => payload[:message_id])
+              event!(:info, :info => "Stack update complete! [#{stack}]", :message_id => payload[:message_id])
             else
               stack_name = payload.get(:data, :stacks, :name)
               info "Stack does not exist. Building new stack [#{stack_name}]"
               event!(:info, :info => "Building new stack. [#{stack_name}]", :message_id => payload[:message_id])
               run_stack(ctn, payload, remote_dir, :create)
               payload.set(:data, :stacks, :created, true)
-              stack = stacks_api.stacks.get(stack_name)
               event!(:info, :info => "Stack build complete! [#{stack_name}]", :message_id => payload[:message_id])
             end
-            payload.set(:data, :stacks, :id, stack.id)
+#            payload.set(:data, :stacks, :id, stack.id)
           rescue => e
             error "Failed to apply stack action! #{e.class}: #{e}"
             debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
