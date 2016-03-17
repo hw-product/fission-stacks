@@ -23,34 +23,12 @@ module Fission
           ctn.push_file(File.open(asset.path, 'rb'), remote_asset)
           ctn.exec!("mkdir -p #{remote_dir}")
           ctn.exec!("unzip #{remote_asset} -d #{remote_dir}")
-          result = ctn.exec("sfn describe #{payload.get(:data, :stacks, :name)}")
-          if(result.success?)
-            stack = payload.get(:data, :stacks, :name)
-          else
-            debug "Failed to fetch defined stack name: #{e.class} - #{e}"
-            stack = nil
-          end
-          begin
-            if(stack)
-              info "Stack currently exists. Applying update [#{stack}]"
-              event!(:info, :info => "Found existing stack. Applying update. [#{stack}]", :message_id => payload[:message_id])
-              run_stack(ctn, payload, remote_dir, :update)
-              payload.set(:data, :stacks, :updated, true)
-              event!(:info, :info => "Stack update complete! [#{stack}]", :message_id => payload[:message_id])
-            else
-              stack_name = payload.get(:data, :stacks, :name)
-              info "Stack does not exist. Building new stack [#{stack_name}]"
-              event!(:info, :info => "Building new stack. [#{stack_name}]", :message_id => payload[:message_id])
-              run_stack(ctn, payload, remote_dir, :create)
-              payload.set(:data, :stacks, :created, true)
-              event!(:info, :info => "Stack build complete! [#{stack_name}]", :message_id => payload[:message_id])
-            end
-#            payload.set(:data, :stacks, :id, stack.id)
-          rescue => e
-            error "Failed to apply stack action! #{e.class}: #{e}"
-            debug "#{e.class}: #{e}\n#{e.backtrace.join("\n")}"
-            raise
-          end
+          stack_name = payload.get(:data, :stacks, :name)
+          info "Starting stack processing for message #{message} -> Stack: #{stack_name}"
+          event!(:info, :info => "Starting stack processing on #{stack_name}", :message_id => payload[:message_id])
+          result = run_stack(ctn, payload, remote_dir)
+          payload.set(:data, :stacks, result, true)
+          event!(:info, :info => "Completed stack #{result} on #{stack_name}", :message_id => payload[:message_id])
           job_completed(:stacks, payload, message)
         end
       end
@@ -63,18 +41,43 @@ module Fission
       # Run action on stack
       #
       # @param ctn [Fission::Utils::RemoteProcess]
-      # @return [Hash] payload
-      def run_stack(ctn, payload, directory, action)
-        unless([:create, :update].include?(action.to_sym))
-          abort ArgumentError.new("Invalid action argument `#{action}`. Expecting `create` or `update`!")
-        end
-        ctn.exec!('bundle install', :cwd => directory, :timeout => 120)
+      # @param payload [Hash]
+      # @param directory [String]
+      # @return [Symbol] :create or :update
+      def run_stack(ctn, payload, directory)
+        env_vars = build_environment_variables(payload)
         stack_name = payload.get(:data, :stacks, :name)
+        event!(:info, :info => 'Installing local bundle', :message_id => payload[:message_id])
+
+        result = ctn.exec('bundle install',
+          :cwd => directory,
+          :timeout => 120,
+          :environment => env_vars
+        )
+        if(result.success?)
+          event!(:info, :info => 'Bundle installation complete!', :message_id => payload[:message_id])
+        else
+          result.output.rewind
+          result.output.read.split("\n").each do |line|
+            event!(:info, :info => line, :message_id => payload[:message_id])
+          end
+          event!(:info, :info => 'Bundle installation failed!', :message_id => payload[:message_id])
+          raise 'Failed to install user bundle'
+        end
+
+        result = ctn.exec("sfn describe #{stack_name}",
+          :cwd => directory,
+          :environment => env_vars
+        )
+        if(result.success?)
+          action = 'update'
+        else
+          action = 'create'
+        end
 
         event!(:info, :info => "Starting stack #{action} - #{stack_name}!", :message_id => payload[:message_id])
 
         stream = Fission::Utils::RemoteProcess::QueueStream.new
-        env_vars = build_environment_variables(payload)
         future = Zoidberg::Future.new do
           begin
             ctn.exec(
@@ -116,6 +119,7 @@ module Fission
           error = Fission::Error::RemoteProcessFailed.new("Stack #{action} failed - Exit code: #{result.exit_code}")
           raise error
         end
+        action
       end
 
       def build_environment_variables(payload)
